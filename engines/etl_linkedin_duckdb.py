@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 logging.basicConfig(level=logging.ERROR)
 
 
-class EtlLinkedin:
+class EtlLinkedinDuckDb:
     """
     Classe responsável pelo processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
@@ -442,8 +442,8 @@ class EtlLinkedin:
             "2023_Mar_2": "2023-03-31",
             "2023_Abr_1": "2023-04-15",
             "2023_Abr_2": "2023-04-30",
-            "2023_Mai_1": "2023-05-15",
-            "2023_Mai_2": "2023-05-31",
+            "2023_Maio_1": "2023-05-15",
+            "2023_Maio_2": "2023-05-31",
             "2023_Jun_1": "2023-06-15",
             "2023_Jun_2": "2023-06-30",
             "2023_Jul_1": "2023-07-15",
@@ -466,8 +466,8 @@ class EtlLinkedin:
             "2024_Mar_2": "2024-03-31",
             "2024_Abr_1": "2024-04-15",
             "2024_Abr_2": "2024-04-30",
-            "2024_Mai_1": "2024-05-15",
-            "2024_Mai_2": "2024-05-31",
+            "2024_Maio_1": "2024-05-15",
+            "2024_Maio_2": "2024-05-31",
             "2024_Jun_1": "2024-06-15",
             "2024_Jun_2": "2024-06-30",
             "2024_Jul_1": "2024-07-15",
@@ -656,7 +656,7 @@ def main():
     raw_directory = "data/linkedin/raw"
     clean_directory = "data/linkedin/clean"
 
-    etl = EtlLinkedin(raw_directory, clean_directory)
+    etl = EtlLinkedinDuckDb(raw_directory, clean_directory)
     pandas_dataframes = etl.extract_data()
     tables = etl.convert_dataframes_to_duckdb(pandas_dataframes)
     etl.transform_data(tables)
