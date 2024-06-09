@@ -4,6 +4,8 @@ import time
 from engines.etl_linkedin_duckdb import EtlLinkedinDuckDb
 from engines.etl_linkedin_pandas import EtlLinkedinPandas
 from engines.etl_linkedin_polars import EtlLinkedinPolars
+import csv
+
 
 def clear_directory(directory):
     """
@@ -16,6 +18,7 @@ def clear_directory(directory):
     if os.path.exists(directory):
         shutil.rmtree(directory)
 
+
 def timer(func):
     """
     Função para medir o tempo de execução de uma função.
@@ -26,6 +29,7 @@ def timer(func):
     Retorno:
     function: Função com o tempo de execução medido.
     """
+
     def wrapper(*args, **kwargs):
         """
         Função que mede o tempo de execução de uma função.
@@ -41,14 +45,82 @@ def timer(func):
         result = func(*args, **kwargs)
         elapsed_time = time.time() - start_time
         print(f"[{args[0].engine}] {func.__name__}: {elapsed_time:.2f} seconds")
+        args[0].engine_metrics[func.__name__] = elapsed_time.__round__(2)
         return result
+
     return wrapper
+
+
+def collect_environment_metrics(raw_directory):
+    """
+    Função para coletar os dados de ambiente.
+
+    Parâmetros:
+    raw_directory (str): Diretório de dados brutos.
+
+    Retorno:
+    dict: Dicionário contendo os dados de ambiente.
+    """
+    etl = EtlLinkedinPolars(raw_directory, "_")
+    files = etl.get_raw_files(raw_directory)
+    data = etl.extract_data()
+
+    num_files = len(files)
+    num_tables = len(data)
+    total_columns = 0
+    total_rows = 0
+
+    for dataframe in data:
+        total_columns += dataframe["df"].shape[1]
+        total_rows += dataframe["df"].shape[0]
+
+    environment_metrics = {
+        "num_files": num_files,
+        "num_tables": num_tables,
+        "total_columns": total_columns,
+        "total_rows": total_rows,
+    }
+    return environment_metrics
+
+
+def save_environment_metrics(environment_metrics, file_name="environment_metrics.csv"):
+    """
+    Função para salvar os dados de ambiente em um arquivo CSV.
+
+    Parâmetros:
+    environment_metrics (dict): Dicionário contendo os dados de ambiente.
+    file_name (str): Nome do arquivo CSV. O padrão é 'environment_metrics.csv'.
+
+    Retorno:
+    int: Índice do registro no arquivo CSV.
+    """
+    fieldnames = ["index", "num_files", "num_tables", "total_columns", "total_rows"]
+    file_exists = os.path.isfile(file_name)
+
+    if file_exists:
+        with open(file_name, mode="r") as file:
+            reader = csv.DictReader(file)
+            index = sum(1 for row in reader)
+    else:
+        index = 0
+
+    environment_metrics["index"] = index
+
+    with open(file_name, mode="a", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(environment_metrics)
+
+    return index
+
 
 class EtlLinkedin:
     """
     Classe para teste de processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
-    def __init__(self, raw_directory, clean_directory, engine):
+
+    def __init__(self, raw_directory, clean_directory, engine, environment_index):
         """
         Inicializa a classe EtlLinkedin com os diretórios de dados brutos e limpos e o motor de processamento.
 
@@ -61,6 +133,8 @@ class EtlLinkedin:
         self.raw_directory = raw_directory
         self.clean_directory = clean_directory
         self.etl = self.get_etl_instance(engine)
+        self.engine_metrics = {}
+        self.environment_index = environment_index
 
     def get_etl_instance(self, engine):
         """
@@ -89,10 +163,11 @@ class EtlLinkedin:
         return self.etl.extract_data()
 
     @timer
-    def convert_dataframes_to_duckdb(self, data):
+    def extract_data_to_duckdb(self):
         """
         Função para iniciar o processo de conversão de dados da engine.
         """
+        data = self.etl.extract_data()
         return self.etl.convert_dataframes_to_duckdb(data)
 
     @timer
@@ -171,7 +246,7 @@ class EtlLinkedin:
         """
         clear_directory(self.clean_directory)
         print("Starting ETL process using", self.engine)
-        
+
         total_start_time = time.time()
 
         if self.engine == "duckdb":
@@ -183,14 +258,17 @@ class EtlLinkedin:
         else:
             raise ValueError("Invalid engine specified")
 
-        print(f"[{self.engine}] Total ETL time: {time.time() - total_start_time:.2f} seconds")
+        total_elapsed_time = time.time() - total_start_time
+        self.engine_metrics["total_etl_time"] = total_elapsed_time.__round__(2)
+        print(f"[{self.engine}] Total ETL time: {total_elapsed_time:.2f} seconds")
+
+        self.save_metrics_to_csv()
 
     def steps_duckdb(self):
         """
         Função para iniciar fluxo de processamento da engine DuckDb.
         """
-        data = self.extract_data()
-        data = self.convert_dataframes_to_duckdb(data)
+        data = self.extract_data_to_duckdb()
         data = self.transform_data(data)
         self.load_to_clean(data)
         monthly_data = self.concatenate_monthly_data_duckdb(data)
@@ -222,10 +300,25 @@ class EtlLinkedin:
         category_data = self.concatenate_category_data(monthly_data)
         self.export_category_data(category_data)
 
+    def save_metrics_to_csv(self):
+        file_exists = os.path.isfile("etl_metrics.csv")
+        with open("etl_metrics.csv", mode="a", newline="") as file:
+            writer = csv.writer(file)
+            if not file_exists:
+                writer.writerow(["environment_index", "engine", "step", "time_seconds"])
+            for step, time_seconds in self.engine_metrics.items():
+                writer.writerow(
+                    [self.environment_index, self.engine, step, time_seconds]
+                )
+
+
 if __name__ == "__main__":
     dir_raw = "data/linkedin/raw"
     dir_clean = "data/linkedin/clean"
 
+    env_metrics = collect_environment_metrics(dir_raw)
+    env_index = save_environment_metrics(env_metrics)
+
     engines = ["duckdb", "polars", "pandas"]
     for engine in engines:
-        EtlLinkedin(dir_raw, dir_clean, engine).process_data()
+        EtlLinkedin(dir_raw, dir_clean, engine, env_index).process_data()
