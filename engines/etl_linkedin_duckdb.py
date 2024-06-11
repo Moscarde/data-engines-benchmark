@@ -1,7 +1,6 @@
 import pandas as pd
 import os
 import duckdb
-import re
 import calendar
 
 import warnings
@@ -82,7 +81,7 @@ class EtlLinkedinDuckDb:
                             {
                                 "category": df_category,
                                 "file_path": file_path,
-                                "dir": month_path,
+                                "dir": [category, year, month],
                                 "extraction_period": f"{year}_{month}_{i+1}",
                             }
                         )
@@ -311,7 +310,7 @@ class EtlLinkedinDuckDb:
             "dataframe_name": dataframe["dataframe_name"],
             "extraction_period": dataframe["extraction_period"],
             "db_table_name": db_table_name,
-            "export_dir": dataframe["dir"].replace("raw", "clean"),
+            "export_dir": os.path.join(self.clean_directory, *dataframe["dir"]),
         }
 
         return table_dict
@@ -585,23 +584,14 @@ class EtlLinkedinDuckDb:
         Retorno:
         dict: Dicionário contendo os dados agrupados por categoria.
         """
-        monthly_data_t = {
-            "competitor_2023_Ago": {
-                "category": "competitor",
-                "export_dir": "linkedin/clean\\Concorrentes\\2023\\Ago",
-                "tables": ["competitor_2023_Ago_1", "competitor_2023_Ago_2"],
-            }
-        }
 
         grouped_data_category = {}
 
         for category_year_month, grouped_data in monthly_data.items():
             if grouped_data["category"] not in grouped_data_category:
                 grouped_data_category[grouped_data["category"]] = {
-                    "export_dir": re.sub(
-                        r"(clean)[\\/].*",
-                        r"\1/concatenated_dataframes",
-                        grouped_data["export_dir"],
+                    "export_dir": os.path.join(
+                        self.clean_directory, "concatenated_dataframes"
                     ),
                     "tables": [],
                 }

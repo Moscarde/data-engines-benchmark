@@ -1,11 +1,6 @@
 import polars as pl
 import os
-import re
 import calendar
-
-# import warnings
-
-# warnings.simplefilter("ignore")
 
 
 class EtlLinkedinPolars:
@@ -75,7 +70,7 @@ class EtlLinkedinPolars:
                             {
                                 "category": df_category,
                                 "file_path": file_path,
-                                "dir": month_path,
+                                "dir": [category, year, month],
                                 "extraction_period": f"{year}-{month}-{i+1}",
                             }
                         )
@@ -500,7 +495,7 @@ class EtlLinkedinPolars:
         int: Retorna 1 se a carga for bem-sucedida.
         """
         for dataframe in data:
-            dir_export = dataframe["dir"].replace("raw", "clean")
+            dir_export = os.path.join(self.clean_directory, *dataframe["dir"])
             if not os.path.exists(dir_export):
                 os.makedirs(dir_export)
 
@@ -539,7 +534,7 @@ class EtlLinkedinPolars:
             if tag_month not in grouped_data_month:
                 grouped_data_month[tag_month] = {
                     "category": dataframe["dataframe_name"],
-                    "export_dir": dataframe["dir"].replace("raw", "clean"),
+                    "export_dir": os.path.join(self.clean_directory, *dataframe["dir"]),
                     "dfs": [],
                 }
 
@@ -593,10 +588,8 @@ class EtlLinkedinPolars:
             if dataframe["category"] not in grouped_data_category:
                 grouped_data_category[dataframe["category"]] = {
                     "category": dataframe["category"],
-                    "export_dir": re.sub(
-                        r"(clean)[\\/].*",
-                        r"\1/concatenated_dataframes",
-                        dataframe["export_dir"],
+                    "export_dir": os.path.join(
+                        self.clean_directory, "concatenated_dataframes"
                     ),
                     "dfs": [],
                 }
@@ -615,7 +608,7 @@ class EtlLinkedinPolars:
 
 def main():
 
-    raw_directory = "data/linkedin/raw"
+    raw_directory = "data/linkedin/raw_2025"
     clean_directory = "data/linkedin/clean"
 
     etl = EtlLinkedinPolars(raw_directory, clean_directory)
@@ -638,6 +631,7 @@ if __name__ == "__main__":
     # debug
     # delete clean_dir
     import shutil
+
     if os.path.exists("data/linkedin/clean"):
         shutil.rmtree("data/linkedin/clean")
 
