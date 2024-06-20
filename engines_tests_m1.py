@@ -1,9 +1,9 @@
 import shutil
 import os
 import time
-from engines.etl_linkedin_duckdb import EtlLinkedinDuckDb
-from engines.etl_linkedin_pandas import EtlLinkedinPandas
-from engines.etl_linkedin_polars import EtlLinkedinPolars
+from engines.method_1.etl_linkedin_duckdb import EtlLinkedinDuckDb
+from engines.method_1.etl_linkedin_pandas import EtlLinkedinPandas
+from engines.method_1.etl_linkedin_polars import EtlLinkedinPolars
 import csv
 
 
@@ -51,7 +51,7 @@ def timer(func):
     return wrapper
 
 
-def collect_environment_metrics(raw_directory):
+def collect_scenarios_metrics(raw_directory):
     """
     Função para coletar os dados de ambiente.
 
@@ -74,43 +74,48 @@ def collect_environment_metrics(raw_directory):
         total_columns += dataframe["df"].shape[1]
         total_rows += dataframe["df"].shape[0]
 
-    environment_metrics = {
+    scenarios_metrics = {
         "num_files": num_files,
         "num_tables": num_tables,
         "total_columns": total_columns,
         "total_rows": total_rows,
     }
-    return environment_metrics
+    return scenarios_metrics
 
 
-def save_environment_metrics(environment_metrics, file_name="environment_metrics.csv"):
+def save_scenarios_metrics(
+    scenarios_metrics, filename="data/linkedin/clean/m1/scenarios.csv"
+):
     """
     Função para salvar os dados de ambiente em um arquivo CSV.
 
     Parâmetros:
-    environment_metrics (dict): Dicionário contendo os dados de ambiente.
-    file_name (str): Nome do arquivo CSV. O padrão é 'environment_metrics.csv'.
+    scenarios_metrics (dict): Dicionário contendo os dados de ambiente.
+    filename (str): Nome do arquivo CSV. O padrão é 'scenarios_metrics.csv'.
 
     Retorno:
     int: Índice do registro no arquivo CSV.
     """
-    fieldnames = ["index", "num_files", "num_tables", "total_columns", "total_rows"]
-    file_exists = os.path.isfile(file_name)
+    if not os.path.exists("data/linkedin/clean/m1/"):
+        os.makedirs("data/linkedin/clean/m1/")
+
+    fieldnames = ["index", *scenarios_metrics.keys()]
+    file_exists = os.path.isfile(filename)
 
     if file_exists:
-        with open(file_name, mode="r") as file:
+        with open(filename, mode="r") as file:
             reader = csv.DictReader(file)
             index = sum(1 for row in reader)
     else:
         index = 0
 
-    environment_metrics["index"] = index
+    scenarios_metrics["index"] = index
 
-    with open(file_name, mode="a", newline="") as file:
+    with open(filename, mode="a", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         if not file_exists:
             writer.writeheader()
-        writer.writerow(environment_metrics)
+        writer.writerow(scenarios_metrics)
 
     return index
 
@@ -120,7 +125,7 @@ class EtlLinkedin:
     Classe para teste de processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
 
-    def __init__(self, raw_directory, clean_directory, engine, environment_index):
+    def __init__(self, raw_directory, clean_directory, engine, scenarios_index):
         """
         Inicializa a classe EtlLinkedin com os diretórios de dados brutos e limpos e o motor de processamento.
 
@@ -134,7 +139,7 @@ class EtlLinkedin:
         self.clean_directory = clean_directory
         self.etl = self.get_etl_instance(engine)
         self.engine_metrics = {}
-        self.environment_index = environment_index
+        self.scenarios_index = scenarios_index
 
     def get_etl_instance(self, engine):
         """
@@ -301,24 +306,26 @@ class EtlLinkedin:
         self.export_category_data(category_data)
 
     def save_metrics_to_csv(self):
-        file_exists = os.path.isfile("etl_metrics.csv")
-        with open("etl_metrics.csv", mode="a", newline="") as file:
+        file_exists = os.path.isfile("data/linkedin/clean/m1/metrics.csv")
+        with open(
+            "data/linkedin/clean/m1/metrics.csv", mode="a", newline=""
+        ) as file:
             writer = csv.writer(file)
             if not file_exists:
-                writer.writerow(["environment_index", "engine", "step", "time_seconds"])
+                writer.writerow(["scenarios_index", "engine", "step", "time_seconds"])
             for step, time_seconds in self.engine_metrics.items():
                 writer.writerow(
-                    [self.environment_index, self.engine, step, time_seconds]
+                    [self.scenarios_index, self.engine, step, time_seconds]
                 )
 
 
 if __name__ == "__main__":
-    dir_raw = "data/linkedin/raw"
-    dir_clean = "data/linkedin/clean"
+    dir_raw = "data/linkedin/raw_2030"
 
-    env_metrics = collect_environment_metrics(dir_raw)
-    env_index = save_environment_metrics(env_metrics)
+    env_metrics = collect_scenarios_metrics(dir_raw)
+    env_index = save_scenarios_metrics(env_metrics)
 
     engines = ["duckdb", "polars", "pandas"]
     for engine in engines:
+        dir_clean = f"data/linkedin/clean/m1/{engine}"
         EtlLinkedin(dir_raw, dir_clean, engine, env_index).process_data()

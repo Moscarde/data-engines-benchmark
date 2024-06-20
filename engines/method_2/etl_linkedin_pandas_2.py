@@ -13,7 +13,9 @@ class EtlLinkedinPandas:
     Classe responsável pelo processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
 
-    def __init__(self, raw_directory, clean_directory):
+    def __init__(
+        self, clean_concatenated_directory, unique_extraction_directory, export_dir
+    ):
         """
         Inicializa a classe LinkedInETLProcessor com os diretórios de dados brutos e limpos.
 
@@ -21,8 +23,9 @@ class EtlLinkedinPandas:
         raw_directory (str): Diretório contendo os dados brutos.
         clean_directory (str): Diretório onde os dados limpos serão armazenados.
         """
-        self.raw_directory = raw_directory
-        self.clean_directory = clean_directory
+        self.clean_concatenated_directory = clean_concatenated_directory
+        self.unique_extraction_directory = unique_extraction_directory
+        self.export_dir = export_dir
 
     def detect_file_category(self, file):
         """
@@ -43,43 +46,6 @@ class EtlLinkedinPandas:
         elif "visitors" in file:
             return "visitors"
         return 0
-
-    def get_raw_files(self, raw_directory):
-        """
-        Detecta e retorna uma lista de arquivos brutos a serem processados.
-
-        Parâmetros:
-        raw_directory (str): Diretório contendo os dados brutos.
-
-        Retorno:
-        list: Lista de dicionários com informações sobre os arquivos brutos.
-        """
-        extraction_files = []
-        for category in os.listdir(raw_directory):
-            category_path = os.path.join(raw_directory, category)
-
-            for year in os.listdir(category_path):
-                year_path = os.path.join(category_path, year)
-
-                for month in os.listdir(year_path):
-                    month_path = os.path.join(year_path, month)
-
-                    monthly_files = os.listdir(month_path)
-                    if not monthly_files:
-                        continue
-
-                    for i, file in enumerate(monthly_files):
-                        file_path = os.path.join(month_path, file)
-                        df_category = self.detect_file_category(file)
-                        extraction_files.append(
-                            {
-                                "category": df_category,
-                                "file_path": file_path,
-                                "dir": [category, year, month],
-                                "extraction_period": f"{year}-{month}-{i+1}",
-                            }
-                        )
-        return extraction_files
 
     def read_excel_file(self, file):
         """
@@ -136,19 +102,6 @@ class EtlLinkedinPandas:
             )
 
         return dataframes
-
-    def extract_data(self):
-        """
-        Extrai os dados brutos dos arquivos e retorna uma lista de DataFrames.
-
-        Retorno:
-        list: Lista de dicionários contendo os dados extraídos.
-        """
-
-        files = self.get_raw_files(self.raw_directory)
-
-        data = [obj for file in files for obj in self.read_excel_file(file)]
-        return data
 
     def translate_cols(self, dataframe):
         """
@@ -456,69 +409,7 @@ class EtlLinkedinPandas:
 
         return data
 
-    def load_to_clean(self, data):
-        """
-        Carrega os dados transformados no diretório de dados limpos.
-
-        Parâmetros:
-        data (list): Lista de dicionários contendo os dados transformados.
-
-        Retorno:
-        int: Retorna 1 se a carga for bem-sucedida.
-        """
-        for dataframe in data:
-            dir_export = os.path.join(self.clean_directory, *dataframe["dir"])
-            if not os.path.exists(dir_export):
-                os.makedirs(dir_export)
-
-            export_filename = (
-                dataframe["dataframe_name"]
-                + "_"
-                + dataframe["extraction_period"].split("-")[-1]
-                + ".csv"
-            )
-
-            dataframe["df"].to_csv(
-                os.path.join(dir_export, export_filename),
-                index=False,
-                quoting=csv.QUOTE_ALL,
-            )
-
-        return 1
-
-    def concatenate_monthly_dataframes(self, data):
-        """
-        Agrupa e concatena os DataFrames extraídos por mês.
-
-        Parâmetros:
-        data (list): Lista de dicionários contendo os dados extraídos.
-
-        Retorno:
-        dict: Dicionário com os DataFrames concatenados, categoria e diretório de saída.
-        """
-        grouped_data_month = {}
-
-        for dataframe in data:
-            year_month = "_".join(dataframe["extraction_period"].split("-")[:2])
-            tag_month = f"{year_month}_{dataframe['dataframe_name']}"
-
-            if tag_month not in grouped_data_month:
-                grouped_data_month[tag_month] = {
-                    "category": dataframe["dataframe_name"],
-                    "export_dir": os.path.join(self.clean_directory, *dataframe["dir"]),
-                    "dfs": [],
-                }
-
-            grouped_data_month[tag_month]["dfs"].append(dataframe["df"])
-
-        for tag_month, grouped_data in grouped_data_month.items():
-            grouped_data_month[tag_month]["concatenated_df"] = pd.concat(
-                grouped_data["dfs"]
-            )
-
-        return grouped_data_month
-
-    def export_dataframes(self, data, file_prefix):
+    def export_dataframes(self, data):
         """
         Exporta dataframes concatenados para um arquivo CSV.
 
@@ -530,8 +421,8 @@ class EtlLinkedinPandas:
         int: Retorna 1 se a exportação for bem-sucedida.
         """
         for key, dataframe in data.items():
-            export_dir = dataframe["export_dir"]
-            export_filename = f"{file_prefix}_{dataframe['category']}.csv"
+            export_dir = self.export_dir
+            export_filename = f"{dataframe['category']}.csv"
 
             if os.path.exists(export_dir) == False:
                 os.makedirs(export_dir)
@@ -542,64 +433,87 @@ class EtlLinkedinPandas:
             )
         return 1
 
-    def concatenate_category_dataframes(self, data):
+    def get_clean_concatenated_data(self, concatenated_file_prefix="all_extractions_"):
+        clean_data = {}
+        for filename in os.listdir(self.clean_concatenated_directory):
+
+            # creating obj to send in convert_column_types
+            dataframe = {}
+            dataframe["dataframe_name"] = filename.replace(
+                concatenated_file_prefix, ""
+            ).replace(".csv", "")
+            dataframe["df"] = pd.read_csv(
+                os.path.join(self.clean_concatenated_directory, filename)
+            )
+            dataframe = self.convert_column_types(dataframe)
+
+            # adding dataframe to clean_data
+            clean_data[dataframe["dataframe_name"]] = dataframe["df"]
+        return clean_data
+
+    def get_raw_unique_extraction_data(self, extraction_period="2035-Jan-1"):
         """
-        Concatena todos os arquivos concatenados mensalmente em arquivos únicos por categoria.
+        Função que le os arquivos de extração unica e retorna uma lista de dicionários contendo as informações extraídas.
 
         Parâmetros:
-        clean_data (dict): Dicionário de listas de arquivos mensais limpos a serem concatenados.
+        extraction_period (str): Período de extração (ano-mês-dia) para o arquivo. (default: '2030-Jan-1' para fins dedebug)
 
         Retorno:
-        int: Retorna 1 se a concatenação for bem-sucedida.
+        list: Lista de dicionários contendo os dados extraídos.
         """
-        grouped_data_category = {}
-
-        for key, dataframe in data.items():
-            if dataframe["category"] not in grouped_data_category:
-                grouped_data_category[dataframe["category"]] = {
-                    "category": dataframe["category"],
-                    "export_dir": os.path.join(
-                        self.clean_directory, "concatenated_dataframes"
-                    ),
-                    "dfs": [],
+        files = []
+        for file in os.listdir(self.unique_extraction_directory):
+            files.append(
+                {
+                    "filename": file,
+                    "file_path": os.path.join(self.unique_extraction_directory, file),
+                    "category": self.detect_file_category(file),
+                    "dir": ["-"],
+                    "extraction_period": extraction_period,  # f"{year}-{month}-{i+1}"
                 }
-
-            grouped_data_category[dataframe["category"]]["dfs"].append(
-                dataframe["concatenated_df"]
             )
 
-        for category, grouped_data in grouped_data_category.items():
-            grouped_data_category[category]["concatenated_df"] = pd.concat(
-                grouped_data["dfs"]
-            )
+        extraction_data = [obj for file in files for obj in self.read_excel_file(file)]
+        return extraction_data
 
-        return grouped_data_category
+    def concatenate_unique_extraction_data(self, clean_dataframes, extraction_data):
+        concatenated_data = {}
+        for data in extraction_data:
+            concatenated_data[data["dataframe_name"]] = {}
+            concatenated_data[data["dataframe_name"]]["category"] = data[
+                "dataframe_name"
+            ]
+
+            df1 = clean_dataframes[data["dataframe_name"]]
+            df2 = data["df"]
+            df_merged = pd.concat([df1, df2])
+            concatenated_data[data["dataframe_name"]]["concatenated_df"] = df_merged
+
+        return concatenated_data
 
 
 def main():
     """
     Função principal que executa as operações ETL Linkedin.
     """
+    clean_concatenated_directory = "data/linkedin/clean/pandas/concatenated_dataframes"
+    unique_extraction_directory = "data/linkedin/raw_unique_extraction"
+    export_dir = "data/linkedin/clean/m2/pandas"
 
-    raw_directory = "data/linkedin/raw_2025"
-    clean_directory = "data/linkedin/clean"
+    etl = EtlLinkedinPandas(clean_concatenated_directory, unique_extraction_directory, export_dir)
 
-    etl = EtlLinkedinPandas(raw_directory, clean_directory)
-    data = etl.extract_data()
-    data = etl.transform_data(data)
-    etl.load_to_clean(data)
-
-    concatenated_monthly_dataframes = etl.concatenate_monthly_dataframes(data)
-    etl.export_dataframes(concatenated_monthly_dataframes, file_prefix="month")
-
-    concatenated_category_dataframes = etl.concatenate_category_dataframes(
-        concatenated_monthly_dataframes
+    clean_dataframes = etl.get_clean_concatenated_data()
+    extraction_data = etl.get_raw_unique_extraction_data()
+    extraction_data = etl.transform_data(extraction_data)
+    merged_data = etl.concatenate_unique_extraction_data(
+        clean_dataframes, extraction_data
     )
-    etl.export_dataframes(concatenated_category_dataframes, file_prefix="all_extractions")
+    etl.export_dataframes(merged_data)
 
 
 if __name__ == "__main__":
     import shutil
-    if os.path.exists("data/linkedin/clean"):
-        shutil.rmtree("data/linkedin/clean")
+
+    if os.path.exists("data/linkedin/clean/m2/pandas"):
+        shutil.rmtree("data/linkedin/clean/m2/pandas")
     main()

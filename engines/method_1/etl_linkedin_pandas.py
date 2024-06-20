@@ -1,9 +1,14 @@
-import polars as pl
+import pandas as pd
 import os
+import csv
 import calendar
 
+import warnings
 
-class EtlLinkedinPolars:
+warnings.simplefilter("ignore")
+
+
+class EtlLinkedinPandas:
     """
     Classe responsável pelo processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
@@ -87,26 +92,26 @@ class EtlLinkedinPolars:
         list: Lista de dicionários contendo o nome do DataFrame, diretório, período de extração e o DataFrame.
         """
         category_keys = {
-            "competitor": [{"sheet_name": "competitor", "sheet_pos": 1, "skiprows": 1}],
+            "competitor": [{"sheet_name": "competitor", "sheet_pos": 0, "skiprows": 1}],
             "content": [
-                {"sheet_name": "content_metrics", "sheet_pos": 1, "skiprows": 0},
-                {"sheet_name": "content_posts", "sheet_pos": 2, "skiprows": 0},
+                {"sheet_name": "content_metrics", "sheet_pos": 0, "skiprows": 1},
+                {"sheet_name": "content_posts", "sheet_pos": 1, "skiprows": 1},
             ],
             "followers": [
-                {"sheet_name": "followers_new", "sheet_pos": 1, "skiprows": 0},
-                {"sheet_name": "followers_location", "sheet_pos": 2, "skiprows": 0},
-                {"sheet_name": "followers_function", "sheet_pos": 3, "skiprows": 0},
-                {"sheet_name": "followers_experience", "sheet_pos": 4, "skiprows": 0},
-                {"sheet_name": "followers_industry", "sheet_pos": 5, "skiprows": 0},
-                {"sheet_name": "followers_company_size", "sheet_pos": 6, "skiprows": 0},
+                {"sheet_name": "followers_new", "sheet_pos": 0, "skiprows": 0},
+                {"sheet_name": "followers_location", "sheet_pos": 1, "skiprows": 0},
+                {"sheet_name": "followers_function", "sheet_pos": 2, "skiprows": 0},
+                {"sheet_name": "followers_experience", "sheet_pos": 3, "skiprows": 0},
+                {"sheet_name": "followers_industry", "sheet_pos": 4, "skiprows": 0},
+                {"sheet_name": "followers_company_size", "sheet_pos": 5, "skiprows": 0},
             ],
             "visitors": [
-                {"sheet_name": "visitors_metrics", "sheet_pos": 1, "skiprows": 0},
-                {"sheet_name": "visitors_location", "sheet_pos": 2, "skiprows": 0},
-                {"sheet_name": "visitors_function", "sheet_pos": 3, "skiprows": 0},
-                {"sheet_name": "visitors_experience", "sheet_pos": 4, "skiprows": 0},
-                {"sheet_name": "visitors_industry", "sheet_pos": 5, "skiprows": 0},
-                {"sheet_name": "visitors_company_size", "sheet_pos": 6, "skiprows": 0},
+                {"sheet_name": "visitors_metrics", "sheet_pos": 0, "skiprows": 0},
+                {"sheet_name": "visitors_location", "sheet_pos": 1, "skiprows": 0},
+                {"sheet_name": "visitors_function", "sheet_pos": 2, "skiprows": 0},
+                {"sheet_name": "visitors_experience", "sheet_pos": 3, "skiprows": 0},
+                {"sheet_name": "visitors_industry", "sheet_pos": 4, "skiprows": 0},
+                {"sheet_name": "visitors_company_size", "sheet_pos": 5, "skiprows": 0},
             ],
         }
 
@@ -114,23 +119,12 @@ class EtlLinkedinPolars:
 
         dataframes = []
         for sheet in sheets_to_read:
-            # Original Pandas
-            # df = pd.read_excel(
-            #     file["file_path"],
-            #     sheet_name=sheet["sheet_pos"],
-            #     skiprows=sheet["skiprows"],
-            # )
 
-            df = pl.read_excel(
-                source=file["file_path"],
-                sheet_id=sheet["sheet_pos"],
-                read_options={"skip_rows": sheet["skiprows"]},
+            df = pd.read_excel(
+                file["file_path"],
+                sheet_name=sheet["sheet_pos"],
+                skiprows=sheet["skiprows"],
             )
-
-            if file["category"] == "content":
-                first_row = df.row(0)
-                df.columns = first_row
-                df = df.slice(1, df.height)
 
             dataframes.append(
                 {
@@ -152,6 +146,7 @@ class EtlLinkedinPolars:
         """
 
         files = self.get_raw_files(self.raw_directory)
+
         data = [obj for file in files for obj in self.read_excel_file(file)]
         return data
 
@@ -299,17 +294,12 @@ class EtlLinkedinPolars:
         else:
             day = 15
 
-        final_date = f"{month}/{day}/{year}"
+        final_date = f"{year}-{month}-{day}"
 
-        dataframe["df"] = dataframe["df"].with_columns(
-            pl.lit(final_date).alias("Extraction Range")
-        )
+        dataframe["df"]["Extraction Range"] = final_date
         return dataframe
 
-    def convert_column_types(
-        self,
-        dataframe,
-    ):
+    def convert_column_types(self, dataframe):
         """
         Converte colunas específicas do DataFrame para o tipo de dado adequado.
 
@@ -330,9 +320,7 @@ class EtlLinkedinPolars:
         columns_to_convert.append("Extraction Range")
 
         for column in columns_to_convert:
-            dataframe["df"] = dataframe["df"].with_columns(
-                pl.col(column).str.to_date("%m/%d/%Y")
-            )
+            dataframe["df"][column] = pd.to_datetime(dataframe["df"][column])
 
         return dataframe
 
@@ -346,122 +334,105 @@ class EtlLinkedinPolars:
         Retorno:
         dict: O mesmo dicionário com os dados de métricas de conteúdo limpos.
         """
-        df = dataframe["df"]
-
-        column_type = {
-            "Date": pl.String,  # temp
-            "Impressions (organic)": pl.Int32,
-            "Impressions (sponsored)": pl.Int32,
-            "Impressions (total)": pl.Int32,
-            "Unique impressions (organic)": pl.Int32,
-            "Clicks (organic)": pl.Int32,
-            "Clicks (sponsored)": pl.Int32,
-            "Clicks (total)": pl.Int32,
-            "Reactions (organic)": pl.Int32,
-            "Reactions (sponsored)": pl.Int32,
-            "Reactions (total)": pl.Int32,
-            "Comments (organic)": pl.Int32,
-            "Comments (sponsored)": pl.Int32,
-            "Comments (total)": pl.Int32,
-            "Shares (organic)": pl.Int32,
-            "Shares (sponsored)": pl.Int32,
-            "Shares (total)": pl.Int32,
-            "Engagement rate (organic)": pl.Float64,
-            "Engagement rate (sponsored)": pl.Float64,
-            "Engagement rate (total)": pl.Float64,
-        }
-        df = df.cast(column_type)
-
-        df = df.with_columns(
-            pl.when(pl.col("Reactions (total)") >= 0)
-            .then(pl.col("Reactions (total)"))
-            .otherwise(pl.lit(0))
-            .alias("Reactions (positive)"),
-            pl.when(pl.col("Comments (total)") >= 0)
-            .then(pl.col("Comments (total)"))
-            .otherwise(pl.lit(0))
-            .alias("Comments (positive)"),
-            pl.when(pl.col("Shares (total)") >= 0)
-            .then(pl.col("Shares (total)"))
-            .otherwise(pl.lit(0))
-            .alias("Shares (positive)"),
-            pl.when(pl.col("Clicks (total)") >= 0)
-            .then(pl.col("Clicks (total)"))
-            .otherwise(pl.lit(0))
-            .alias("Clicks (positive)"),
-        )
-
-        df = df.with_columns(
-            (pl.col("Reactions (positive)"))
-            .rolling_mean(window_size=3)
-            .alias("Reactions (moving average)"),
-            (pl.col("Comments (positive)"))
-            .rolling_mean(window_size=3)
-            .alias("Comments (moving average)"),
-            (pl.col("Shares (positive)"))
-            .rolling_mean(window_size=3)
-            .alias("Shares (moving average)"),
-            (pl.col("Clicks (positive)"))
-            .rolling_mean(window_size=3)
-            .alias("Clicks (moving average)"),
-        )
-
-        df = df.with_columns(
-            pl.when(pl.col("Reactions (total)") >= 0)
-            .then(pl.col("Reactions (total)"))
-            .otherwise("Reactions (moving average)")
-            .alias("Reactions (final)"),
-            pl.when(pl.col("Comments (total)") >= 0)
-            .then(pl.col("Comments (total)"))
-            .otherwise("Comments (moving average)")
-            .alias("Comments (final)"),
-            pl.when(pl.col("Shares (total)") >= 0)
-            .then(pl.col("Shares (total)"))
-            .otherwise("Shares (moving average)")
-            .alias("Shares (final)"),
-            pl.when(pl.col("Clicks (total)") >= 0)
-            .then(pl.col("Clicks (total)"))
-            .otherwise("Clicks (moving average)")
-            .alias("Clicks (final)"),
-        )
-
-        engagement_sum = (
-            pl.col("Reactions (final)")
-            + pl.col("Comments (final)")
-            + pl.col("Clicks (final)")
-            + pl.col("Shares (final)")
-        )
-
-        df = df.with_columns(
-            (engagement_sum / pl.col("Impressions (total)")).alias(
-                "Engagement rate (calculed)"
-            )
-        )
-
-        df_final = df.select(
+        df = dataframe["df"][
             [
                 "Date",
                 "Impressions (total)",
-                "Reactions (final)",
-                "Comments (final)",
-                "Clicks (final)",
-                "Shares (final)",
-                "Engagement rate (calculed)",
+                "Clicks (total)",
+                "Reactions (total)",
+                "Comments (total)",
+                "Shares (total)",
+                "Engagement rate (total)",
                 "Extraction Range",
             ]
-        )
-        df_final.columns = [
-            "Date",
-            "Impressions (total)",
-            "Reactions (total)",
-            "Comments (total)",
-            "Clicks (total)",
-            "Shares (total)",
-            "Engagement Rate (total)",
-            "Extraction Range",
         ]
 
-        dataframe["df"] = df_final
+        df["Reactions (positive)"] = df["Reactions (total)"][
+            df["Reactions (total)"] >= 0
+        ]
+        df["Comments (positive)"] = df["Comments (total)"][df["Comments (total)"] >= 0]
+        df["Shares (positive)"] = df["Shares (total)"][df["Shares (total)"] >= 0]
+        df["Clicks (positive)"] = df["Clicks (total)"][df["Clicks (total)"] >= 0]
+
+        df["Reactions (positive)"] = df["Reactions (positive)"].fillna(0)
+        df["Comments (positive)"] = df["Comments (positive)"].fillna(0)
+        df["Shares (positive)"] = df["Shares (positive)"].fillna(0)
+        df["Clicks (positive)"] = df["Clicks (positive)"].fillna(0)
+
+        window = 3
+
+        df["Reactions (moving average)"] = (
+            df["Reactions (positive)"].rolling(window=window).mean()
+        )
+        df["Comments (moving average)"] = (
+            df["Comments (positive)"].rolling(window=window).mean()
+        )
+        df["Shares (moving average)"] = (
+            df["Shares (positive)"].rolling(window=window).mean()
+        )
+        df["Clicks (moving average)"] = (
+            df["Clicks (positive)"].rolling(window=window).mean()
+        )
+
+        df["Reactions (total)"] = df.apply(
+            lambda row: (
+                row["Reactions (moving average)"]
+                if row["Reactions (total)"] < 0
+                else row["Reactions (total)"]
+            ),
+            axis=1,
+        )
+
+        df["Comments (total)"] = df.apply(
+            lambda row: (
+                row["Comments (moving average)"]
+                if row["Comments (total)"] < 0
+                else row["Comments (total)"]
+            ),
+            axis=1,
+        )
+
+        df["Shares (total)"] = df.apply(
+            lambda row: (
+                row["Shares (moving average)"]
+                if row["Shares (total)"] < 0
+                else row["Shares (total)"]
+            ),
+            axis=1,
+        )
+
+        df["Clicks (total)"] = df.apply(
+            lambda row: (
+                row["Clicks (moving average)"]
+                if row["Clicks (total)"] < 0
+                else row["Clicks (total)"]
+            ),
+            axis=1,
+        )
+
+        df["Engagement Rate (total)"] = df.apply(
+            lambda row: (
+                row["Reactions (total)"]
+                + row["Comments (total)"]
+                + row["Clicks (total)"]
+                + row["Shares (total)"]
+            )
+            / row["Impressions (total)"],
+            axis=1,
+        )
+
+        dataframe["df"] = df[
+            [
+                "Date",
+                "Impressions (total)",
+                "Clicks (total)",
+                "Reactions (total)",
+                "Comments (total)",
+                "Shares (total)",
+                "Engagement Rate (total)",
+                "Extraction Range",
+            ]
+        ]
 
         return dataframe
 
@@ -476,6 +447,7 @@ class EtlLinkedinPolars:
         list: Lista de dicionários contendo os dados transformados.
         """
         for dataframe in data:
+
             dataframe = self.translate_cols(dataframe)
             dataframe = self.add_final_date(dataframe)
             dataframe = self.convert_column_types(dataframe)
@@ -506,11 +478,10 @@ class EtlLinkedinPolars:
                 + ".csv"
             )
 
-            dataframe["df"].write_csv(
+            dataframe["df"].to_csv(
                 os.path.join(dir_export, export_filename),
-                quote_style="always",
-                # index=False,
-                # quoting=csv.QUOTE_ALL,
+                index=False,
+                quoting=csv.QUOTE_ALL,
             )
 
         return 1
@@ -541,7 +512,7 @@ class EtlLinkedinPolars:
             grouped_data_month[tag_month]["dfs"].append(dataframe["df"])
 
         for tag_month, grouped_data in grouped_data_month.items():
-            grouped_data_month[tag_month]["concatenated_df"] = pl.concat(
+            grouped_data_month[tag_month]["concatenated_df"] = pd.concat(
                 grouped_data["dfs"]
             )
 
@@ -566,10 +537,9 @@ class EtlLinkedinPolars:
                 os.makedirs(export_dir)
 
             full_path = os.path.join(export_dir, export_filename)
-            # dataframe["concatenated_df"].to_csv(
-            #     full_path, index=False, quoting=csv.QUOTE_ALL
-            # )
-            dataframe["concatenated_df"].write_csv(full_path, quote_style="always")
+            dataframe["concatenated_df"].to_csv(
+                full_path, index=False, quoting=csv.QUOTE_ALL
+            )
         return 1
 
     def concatenate_category_dataframes(self, data):
@@ -599,19 +569,34 @@ class EtlLinkedinPolars:
             )
 
         for category, grouped_data in grouped_data_category.items():
-            grouped_data_category[category]["concatenated_df"] = pl.concat(
+            grouped_data_category[category]["concatenated_df"] = pd.concat(
                 grouped_data["dfs"]
             )
 
         return grouped_data_category
+    
+    ## Metodo 2
+
+    def get_clean_concatenated_data(self, clean_concatenated_path):
+        clean_data = []
+        for filename in os.listdir(clean_concatenated_path):
+            clean_data.append(
+                {
+                    "filename": filename,
+                    "df": pd.read_csv(os.path.join(clean_concatenated_path, filename)),
+                }
+            )
 
 
 def main():
+    """
+    Função principal que executa as operações ETL Linkedin.
+    """
 
-    raw_directory = "data/linkedin/raw_2025"
-    clean_directory = "data/linkedin/clean"
+    raw_directory = "data/linkedin/raw_2030"
+    clean_directory = "data/linkedin/clean/pandas"
 
-    etl = EtlLinkedinPolars(raw_directory, clean_directory)
+    etl = EtlLinkedinPandas(raw_directory, clean_directory)
     data = etl.extract_data()
     data = etl.transform_data(data)
     etl.load_to_clean(data)
@@ -622,17 +607,19 @@ def main():
     concatenated_category_dataframes = etl.concatenate_category_dataframes(
         concatenated_monthly_dataframes
     )
-    etl.export_dataframes(
-        concatenated_category_dataframes, file_prefix="all_extractions"
-    )
+    etl.export_dataframes(concatenated_category_dataframes, file_prefix="all_extractions")
 
+# def method2():
+#     clean_concatenated_path = "data/linkedin/clean/concatenated_dataframes"
+#     raw_directory = "data/linkedin/raw_2030"
+#     clean_directory = "data/linkedin/clean"
+
+#     etl = EtlLinkedinPandas(raw_directory, clean_directory)
+
+#     clean_data = etl.get_clean_concatenated_data(clean_concatenated_path)
 
 if __name__ == "__main__":
-    # debug
-    # delete clean_dir
     import shutil
-
-    if os.path.exists("data/linkedin/clean"):
-        shutil.rmtree("data/linkedin/clean")
-
+    if os.path.exists("data/linkedin/clean/pandas"):
+        shutil.rmtree("data/linkedin/clean/pandas")
     main()

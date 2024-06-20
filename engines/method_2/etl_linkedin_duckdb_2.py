@@ -18,7 +18,9 @@ class EtlLinkedinDuckDb:
     Classe responsável pelo processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
 
-    def __init__(self, raw_directory, clean_directory):
+    def __init__(
+        self, clean_concatenated_directory, unique_extraction_directory, export_dir
+    ):
         """
         Inicializa a classe LinkedInETLProcessor com os diretórios de dados brutos e limpos.
 
@@ -26,8 +28,9 @@ class EtlLinkedinDuckDb:
         raw_directory (str): Diretório contendo os dados brutos.
         clean_directory (str): Diretório onde os dados limpos serão armazenados.
         """
-        self.raw_directory = raw_directory
-        self.clean_directory = clean_directory
+        self.clean_concatenated_directory = clean_concatenated_directory
+        self.unique_extraction_directory = unique_extraction_directory
+        self.export_dir = export_dir
         self.con = duckdb.connect(database=":memory:")
 
     def detect_file_category(self, file):
@@ -49,43 +52,6 @@ class EtlLinkedinDuckDb:
         elif "visitors" in file:
             return "visitors"
         return 0
-
-    def get_raw_files(self, raw_directory):
-        """
-        Detecta e retorna uma lista de arquivos brutos a serem processados.
-
-        Parâmetros:
-        raw_directory (str): Diretório contendo os dados brutos.
-
-        Retorno:
-        list: Lista de dicionários com informações sobre os arquivos brutos.
-        """
-        extraction_files = []
-        for category in os.listdir(raw_directory):
-            category_path = os.path.join(raw_directory, category)
-
-            for year in os.listdir(category_path):
-                year_path = os.path.join(category_path, year)
-
-                for month in os.listdir(year_path):
-                    month_path = os.path.join(year_path, month)
-
-                    monthly_files = os.listdir(month_path)
-                    if not monthly_files:
-                        continue
-
-                    for i, file in enumerate(monthly_files):
-                        file_path = os.path.join(month_path, file)
-                        df_category = self.detect_file_category(file)
-                        extraction_files.append(
-                            {
-                                "category": df_category,
-                                "file_path": file_path,
-                                "dir": [category, year, month],
-                                "extraction_period": f"{year}_{month}_{i+1}",
-                            }
-                        )
-        return extraction_files
 
     def read_excel_file(self, file):
         """
@@ -142,19 +108,6 @@ class EtlLinkedinDuckDb:
             )
 
         return dataframes
-
-    def extract_data(self):
-        """
-        Extrai os dados brutos dos arquivos e retorna uma lista de DataFrames.
-
-        Retorno:
-        list: Lista de dicionários contendo os dados extraídos.
-        """
-
-        files = self.get_raw_files(self.raw_directory)
-
-        data = [obj for file in files for obj in self.read_excel_file(file)]
-        return data
 
     def convert_dataframes_to_duckdb(self, data):
         """
@@ -310,7 +263,6 @@ class EtlLinkedinDuckDb:
             "dataframe_name": dataframe["dataframe_name"],
             "extraction_period": dataframe["extraction_period"],
             "db_table_name": db_table_name,
-            "export_dir": os.path.join(self.clean_directory, *dataframe["dir"]),
         }
 
         return table_dict
@@ -490,150 +442,93 @@ class EtlLinkedinDuckDb:
             self.add_final_date(table)
         return tables
 
-    def load_to_clean(self, tables):
-        """
-        Carrega os dados transformados no diretório de dados limpos.
+    def get_clean_concatenated_data(self, concatenated_file_prefix="all_extractions_"):
+        clean_data_tables = []
+        for filename in os.listdir(self.clean_concatenated_directory):
+            file_path = os.path.join(self.clean_concatenated_directory, filename)
 
-        Parâmetros:
-        tables (list): Lista de dicionários contendo os dados transformados.
-
-        Retorno:
-        int: Retorna 1 se a carga for bem-sucedida.
-        """
-        for table in tables:
-            if not os.path.exists(table["export_dir"]):
-                os.makedirs(table["export_dir"])
-
-            export_filename = table["db_table_name"] + ".csv"
-            self.con.execute(
-                f"COPY {table['db_table_name']} TO '{table['export_dir']}/{export_filename}' (HEADER, DELIMITER ';')"
+            dataframe_name = filename.replace(concatenated_file_prefix, "").replace(
+                ".csv", ""
             )
+            dataframe_name = f"clean_{dataframe_name}"
 
-        return 1
-
-    def concatenate_monthly_tables(self, tables):
-        """
-        Identifica e agrupa tabelas de mesma categoria e mesmo mês em uma lista.
-
-        Parâmetros:
-        tables (list): Lista de dicionários contendo os dados transformados.
-
-        Retorno:
-        dict: Dicionário de listas de arquivos a serem concatenados, organizados por categoria e mês.
-        """
-        monthly_data = {}
-
-        for table in tables:
-            year_month = "_".join(table["extraction_period"].split("_")[:2])
-            category_year_month = f"{table['dataframe_name']}_{year_month}"
-
-            if category_year_month not in monthly_data:
-                monthly_data[category_year_month] = {
-                    "category": table["dataframe_name"],
-                    "export_dir": table["export_dir"],
-                    "tables": [],
-                }
-
-            monthly_data[category_year_month]["tables"].append(table["db_table_name"])
-
-        for category_year_month, grouped_data in monthly_data.items():
-            table_name = category_year_month
-            table_1 = grouped_data["tables"][0]
-            table_2 = grouped_data["tables"][1]
-
-            self.con.execute(
-                f"""
-                CREATE OR REPLACE TABLE "{table_name}" AS
-                SELECT * FROM "{table_1}"
-                UNION ALL
-                SELECT * FROM "{table_2}"
+            create_query = f"""
+                CREATE TABLE "{dataframe_name}" AS
+                SELECT * FROM read_csv_auto('{file_path}')
             """
-            )
+            self.con.execute(create_query)
 
-        return monthly_data
+            clean_data_tables.append(dataframe_name)
 
-    def export_tables(self, tables, export_type):
-        """
-        Exporta um DataFrame concatenado para um arquivo CSV.
+        return clean_data_tables
 
-        Parâmetros:
-        tables (dict): Dicionário contendo as tabelas a serem exportadas.
-        export_type (str): Tipo de exportação (e.g., 'month', 'clean').
-
-        Retorno:
-        int: Retorna 1 se a exportação for bem-sucedida.
-        """
-        for table_name, table_atributes in tables.items():
-
-            if not os.path.exists(table_atributes["export_dir"]):
-                os.makedirs(table_atributes["export_dir"])
-
-            export_filename = f"{export_type}_{table_name}.csv"
-            self.con.execute(
-                f"COPY {table_name} TO '{table_atributes['export_dir']}/{export_filename}' (HEADER, DELIMITER ';')"
-            )
-        return 1
-
-    def concatenate_category_tables(self, monthly_data):
-        """
-        Identifica e agrupa tabelas de mesma categoria.
-
-        Parâmetros:
-        monthly_data (dict): Dicionário de listas de arquivos mensais limpos a serem concatenados.
-
-        Retorno:
-        dict: Dicionário contendo os dados agrupados por categoria.
-        """
-
-        grouped_data_category = {}
-
-        for category_year_month, grouped_data in monthly_data.items():
-            if grouped_data["category"] not in grouped_data_category:
-                grouped_data_category[grouped_data["category"]] = {
-                    "export_dir": os.path.join(
-                        self.clean_directory, "concatenated_dataframes"
-                    ),
-                    "tables": [],
+    def get_raw_unique_extraction_data(self, extraction_period="2035_Jan_1"):
+        files = []
+        for file in os.listdir(self.unique_extraction_directory):
+            files.append(
+                {
+                    "filename": file,
+                    "file_path": os.path.join(self.unique_extraction_directory, file),
+                    "category": self.detect_file_category(file),
+                    "dir": ["-"],
+                    "extraction_period": extraction_period,  # f"{year}-{month}-{i+1}"
                 }
-
-            grouped_data_category[grouped_data["category"]]["tables"].append(
-                category_year_month
             )
 
-        for category, grouped_data in grouped_data_category.items():
-            table_name = category
+        extraction_data = [obj for file in files for obj in self.read_excel_file(file)]
+        return extraction_data
 
-            union_all_query = ""
-            for table in grouped_data["tables"]:
-                union_all_query += f'SELECT * FROM "{table}" UNION ALL '
+    def concatenate_unique_extraction_data(self, clean_tables, extraction_tables):
+        concatenated_tables = []
+        for table in extraction_tables:
+            table_name = table["dataframe_name"]
 
-            union_all_query = union_all_query.rstrip(" UNION ALL ")
-
-            self.con.execute(
-                f"""
+            query = f"""
                 CREATE OR REPLACE TABLE "{table_name}" AS
-                {union_all_query}
-                """
-            )
+                SELECT * FROM "clean_{table_name}"
+                UNION ALL
+                SELECT * FROM "{table["db_table_name"]}"
+            """
 
-        return grouped_data_category
+            self.con.execute(query)
+
+            concatenated_tables.append(table_name)
+        return concatenated_tables
+
+    def export_dataframes(self, tables):
+        if not os.path.exists(self.export_dir):
+            os.makedirs(self.export_dir)
+
+        for table in tables:
+            export_filename = f"{table}.csv"
+
+            query = f"""
+                COPY {table} TO '{os.path.join(self.export_dir, export_filename)}' (HEADER, DELIMITER ';')
+"""
+
+            self.con.execute(query)
+
+        return 1
 
 
 def main():
-    raw_directory = "data/linkedin/raw"
-    clean_directory = "data/linkedin/clean"
+    clean_concatenated_directory = "data/linkedin/clean/duckdb/concatenated_dataframes"
+    unique_extraction_directory = "data/linkedin/raw_unique_extraction"
+    export_dir = "data/linkedin/clean/m2/duckdb"
 
-    etl = EtlLinkedinDuckDb(raw_directory, clean_directory)
-    pandas_dataframes = etl.extract_data()
-    tables = etl.convert_dataframes_to_duckdb(pandas_dataframes)
-    etl.transform_data(tables)
-    etl.load_to_clean(tables)
+    etl = EtlLinkedinDuckDb(clean_concatenated_directory, unique_extraction_directory, export_dir)
 
-    monthly_tables = etl.concatenate_monthly_tables(tables)
-    etl.export_tables(monthly_tables, "month")
+    clean_tables = etl.get_clean_concatenated_data(clean_concatenated_directory)
 
-    category_tables = etl.concatenate_category_tables(monthly_tables)
-    etl.export_tables(category_tables, "all_extractions")
+    extraction_data_pandas = etl.get_raw_unique_extraction_data()
+
+    extraction_tables = etl.convert_dataframes_to_duckdb(extraction_data_pandas)
+    etl.transform_data(extraction_tables)
+    concatenated_tables = etl.concatenate_unique_extraction_data(
+        clean_tables, extraction_tables
+    )
+
+    etl.export_dataframes(concatenated_tables)
 
 
 if __name__ == "__main__":
@@ -641,7 +536,7 @@ if __name__ == "__main__":
     # delete clean_dir
     import shutil
 
-    if os.path.exists("data/linkedin/clean"):
-        shutil.rmtree("data/linkedin/clean")
+    if os.path.exists("data/linkedin/clean/m2/duckdb"):
+        shutil.rmtree("data/linkedin/clean/m2/duckdb")
 
     main()
