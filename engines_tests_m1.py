@@ -1,10 +1,11 @@
 import shutil
 import os
 import time
+import pandas as pd
 from engines.method_1.etl_linkedin_duckdb import EtlLinkedinDuckDb
 from engines.method_1.etl_linkedin_pandas import EtlLinkedinPandas
 from engines.method_1.etl_linkedin_polars import EtlLinkedinPolars
-import csv
+import gc
 
 
 def clear_directory(directory):
@@ -51,7 +52,11 @@ def timer(func):
     return wrapper
 
 
-def collect_scenarios_metrics(raw_directory):
+def save_environment_metrics(
+    environment,
+    environment_dir,
+    environment_data="data/linkedin/clean/m1/environments.csv",
+):
     """
     Função para coletar os dados de ambiente.
 
@@ -61,8 +66,9 @@ def collect_scenarios_metrics(raw_directory):
     Retorno:
     dict: Dicionário contendo os dados de ambiente.
     """
-    etl = EtlLinkedinPolars(raw_directory, "_")
-    files = etl.get_raw_files(raw_directory)
+    print("Collecting environment metrics...")
+    etl = EtlLinkedinPandas(environment_dir, "_")
+    files = etl.get_raw_files(environment_dir)
     data = etl.extract_data()
 
     num_files = len(files)
@@ -74,50 +80,20 @@ def collect_scenarios_metrics(raw_directory):
         total_columns += dataframe["df"].shape[1]
         total_rows += dataframe["df"].shape[0]
 
-    scenarios_metrics = {
+    environment_metrics = {
+        "environment": environment,
         "num_files": num_files,
         "num_tables": num_tables,
         "total_columns": total_columns,
         "total_rows": total_rows,
     }
-    return scenarios_metrics
 
-
-def save_scenarios_metrics(
-    scenarios_metrics, filename="data/linkedin/clean/m1/scenarios.csv"
-):
-    """
-    Função para salvar os dados de ambiente em um arquivo CSV.
-
-    Parâmetros:
-    scenarios_metrics (dict): Dicionário contendo os dados de ambiente.
-    filename (str): Nome do arquivo CSV. O padrão é 'scenarios_metrics.csv'.
-
-    Retorno:
-    int: Índice do registro no arquivo CSV.
-    """
-    if not os.path.exists("data/linkedin/clean/m1/"):
-        os.makedirs("data/linkedin/clean/m1/")
-
-    fieldnames = ["index", *scenarios_metrics.keys()]
-    file_exists = os.path.isfile(filename)
-
-    if file_exists:
-        with open(filename, mode="r") as file:
-            reader = csv.DictReader(file)
-            index = sum(1 for row in reader)
+    if os.path.exists(environment_data):
+        pd.DataFrame([environment_metrics]).to_csv(
+            environment_data, mode="a", index=False, header=False
+        )
     else:
-        index = 0
-
-    scenarios_metrics["index"] = index
-
-    with open(filename, mode="a", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(scenarios_metrics)
-
-    return index
+        pd.DataFrame([environment_metrics]).to_csv(environment_data, index=False)
 
 
 class EtlLinkedin:
@@ -125,7 +101,7 @@ class EtlLinkedin:
     Classe para teste de processamento ETL (Extração, Transformação e Carga) de dados do LinkedIn.
     """
 
-    def __init__(self, raw_directory, clean_directory, engine, scenarios_index):
+    def __init__(self, raw_directory, clean_directory, engine, environment):
         """
         Inicializa a classe EtlLinkedin com os diretórios de dados brutos e limpos e o motor de processamento.
 
@@ -139,7 +115,8 @@ class EtlLinkedin:
         self.clean_directory = clean_directory
         self.etl = self.get_etl_instance(engine)
         self.engine_metrics = {}
-        self.scenarios_index = scenarios_index
+        self.engine_metrics["environment"] = environment
+        self.engine_metrics["engine"] = engine
 
     def get_etl_instance(self, engine):
         """
@@ -165,15 +142,11 @@ class EtlLinkedin:
         """
         Função para iniciar o processo de extração de dados da engine.
         """
-        return self.etl.extract_data()
-
-    @timer
-    def extract_data_to_duckdb(self):
-        """
-        Função para iniciar o processo de conversão de dados da engine.
-        """
         data = self.etl.extract_data()
-        return self.etl.convert_dataframes_to_duckdb(data)
+        if self.engine == "duckdb":
+            return self.etl.convert_dataframes_to_duckdb(data)
+        else:
+            return data
 
     @timer
     def transform_data(self, data):
@@ -197,53 +170,44 @@ class EtlLinkedin:
         return self.etl.concatenate_monthly_tables(data)
 
     @timer
-    def export_monthly_data_duckdb(self, data):
-        """
-        Função para iniciar o processo de exportação dos dados da engine DuckDb.
-        """
-        self.etl.export_tables(data, "month")
-
-    @timer
-    def concatenate_category_data_duckdb(self, data):
-        """
-        Função para iniciar o processo de concatenação dos dados da engine DuckDb.
-        """
-        return self.etl.concatenate_category_tables(data)
-
-    @timer
-    def export_category_data_duckdb(self, data):
-        """
-        Função para iniciar o processo de exportação dos dados da engine DuckDb.
-        """
-        self.etl.export_tables(data, "all_extractions")
-
-    @timer
     def concatenate_monthly_data(self, data):
         """
         Função para iniciar o processo de concatenação dos dados da engine.
         """
-        return self.etl.concatenate_monthly_dataframes(data)
+        if self.engine == "duckdb":
+            return self.etl.concatenate_monthly_tables(data)
+        else:
+            return self.etl.concatenate_monthly_dataframes(data)
 
     @timer
     def export_monthly_data(self, data):
         """
         Função para iniciar o processo de exportação dos dados da engine.
         """
-        self.etl.export_dataframes(data, file_prefix="month")
+        if self.engine == "duckdb":
+            self.etl.export_tables(data, "month")
+        else:
+            self.etl.export_dataframes(data, file_prefix="month")
 
     @timer
     def concatenate_category_data(self, data):
         """
         Função para iniciar o processo de concatenação dos dados da engine.
         """
-        return self.etl.concatenate_category_dataframes(data)
+        if self.engine == "duckdb":
+            return self.etl.concatenate_category_tables(data)
+        else:
+            return self.etl.concatenate_category_dataframes(data)
 
     @timer
     def export_category_data(self, data):
         """
         Função para iniciar o processo de exportação dos dados concatenados da engine.
         """
-        self.etl.export_dataframes(data, file_prefix="all_extractions")
+        if self.engine == "duckdb":
+            self.etl.export_tables(data, "all_extractions")
+        else:
+            self.etl.export_dataframes(data, file_prefix="all_extractions")
 
     def process_data(self):
         """
@@ -254,14 +218,7 @@ class EtlLinkedin:
 
         total_start_time = time.time()
 
-        if self.engine == "duckdb":
-            self.steps_duckdb()
-        elif self.engine == "pandas":
-            self.steps_pandas()
-        elif self.engine == "polars":
-            self.steps_polars()
-        else:
-            raise ValueError("Invalid engine specified")
+        self.steps_etl()
 
         total_elapsed_time = time.time() - total_start_time
         self.engine_metrics["total_etl_time"] = total_elapsed_time.__round__(2)
@@ -269,21 +226,9 @@ class EtlLinkedin:
 
         self.save_metrics_to_csv()
 
-    def steps_duckdb(self):
+    def steps_etl(self):
         """
-        Função para iniciar fluxo de processamento da engine DuckDb.
-        """
-        data = self.extract_data_to_duckdb()
-        data = self.transform_data(data)
-        self.load_to_clean(data)
-        monthly_data = self.concatenate_monthly_data_duckdb(data)
-        self.export_monthly_data_duckdb(monthly_data)
-        category_data = self.concatenate_category_data_duckdb(monthly_data)
-        self.export_category_data_duckdb(category_data)
-
-    def steps_pandas(self):
-        """
-        Função para iniciar fluxo de processamento da engine Pandas.
+        Função para iniciar fluxo de processamento da engine.
         """
         data = self.extract_data()
         data = self.transform_data(data)
@@ -293,39 +238,32 @@ class EtlLinkedin:
         category_data = self.concatenate_category_data(monthly_data)
         self.export_category_data(category_data)
 
-    def steps_polars(self):
-        """
-        Função para iniciar fluxo de processamento da engine Polars.
-        """
-        data = self.extract_data()
-        data = self.transform_data(data)
-        self.load_to_clean(data)
-        monthly_data = self.concatenate_monthly_data(data)
-        self.export_monthly_data(monthly_data)
-        category_data = self.concatenate_category_data(monthly_data)
-        self.export_category_data(category_data)
+    def save_metrics_to_csv(self, metrics_file="data/linkedin/clean/m1/engines.csv"):
+        file_exists = os.path.isfile(metrics_file)
 
-    def save_metrics_to_csv(self):
-        file_exists = os.path.isfile("data/linkedin/clean/m1/metrics.csv")
-        with open(
-            "data/linkedin/clean/m1/metrics.csv", mode="a", newline=""
-        ) as file:
-            writer = csv.writer(file)
-            if not file_exists:
-                writer.writerow(["scenarios_index", "engine", "step", "time_seconds"])
-            for step, time_seconds in self.engine_metrics.items():
-                writer.writerow(
-                    [self.scenarios_index, self.engine, step, time_seconds]
-                )
+        if file_exists:
+            pd.DataFrame(self.engine_metrics, index=[0]).to_csv(
+                metrics_file, mode="a", index=False, header=False
+            )
+        else:
+            pd.DataFrame(self.engine_metrics, index=[0]).to_csv(
+                metrics_file, index=False
+            )
 
 
 if __name__ == "__main__":
-    dir_raw = "data/linkedin/raw_2030"
+    dir_raw = "data/linkedin/raw"
+    environments_tests = ["1y", "2y", "6y"]
 
-    env_metrics = collect_scenarios_metrics(dir_raw)
-    env_index = save_scenarios_metrics(env_metrics)
+    for environment in environments_tests:
+        dir_environment = "_".join([dir_raw, environment])
 
-    engines = ["duckdb", "polars", "pandas"]
-    for engine in engines:
-        dir_clean = f"data/linkedin/clean/m1/{engine}"
-        EtlLinkedin(dir_raw, dir_clean, engine, env_index).process_data()
+        save_environment_metrics(environment, dir_environment)
+
+        engines = ["duckdb", "polars", "pandas"]
+        for engine in engines:
+            dir_clean = f"data/linkedin/clean/m1/{engine}/{environment}"
+            etl = EtlLinkedin(dir_environment, dir_clean, engine, environment)
+            etl.process_data()
+            del etl
+            gc.collect()
