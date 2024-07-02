@@ -1,37 +1,34 @@
-Desenvolvido em [[Semana 26]]
-
----
-
-# Sumário
-
-- [Sumário](#sumário)
-  - [Introdução](#introdução)
-  - [Engines de processamento](#engines-de-processamento)
-    - [Pandas](#pandas)
-    - [Polars](#polars)
-    - [DuckDB](#duckdb)
-  - [Abordagens](#abordagens)
-    - [Estratégia de processamento 1](#estratégia-de-processamento-1)
-    - [Estratégia de processamento 2](#estratégia-de-processamento-2)
-  - [Resultados](#resultados)
-    - [Estratégia de processamento 1](#estratégia-de-processamento-1-1)
-      - [Resultados para a Estratégia 1](#resultados-para-a-estratégia-1)
-    - [Estratégia de processamento 2](#estratégia-de-processamento-2-1)
-      - [Resultados para a Estratégia 2](#resultados-para-a-estratégia-2)
-  - [Resultado geral](#resultado-geral)
-  - [Análise pessoal sobre as engines](#análise-pessoal-sobre-as-engines)
-    - [Pandas](#pandas-1)
-    - [Polars](#polars-1)
-    - [DuckDB](#duckdb-1)
-  - [Escolha da Engine Principal](#escolha-da-engine-principal)
-
----
 ## Introdução
 Como voluntário engenheiro de dados Jr na SouJunior, fui encarregado de uma tarefa crucial: comparar diferentes engines de processamento de dados para identificar a melhor opção para nossa pipeline de ETL (Extração, Transformação e Carga).
 
 Nossa pipeline processa dados extraídos da página do LinkedIn da SouJunior, com extrações ocorrendo a cada 15 dias. Em cada rotina de extração, são gerados quatro arquivos no formato .xls, correspondentes às categorias de `Conteúdo`, `Visitantes`, `Seguidores` e `Concorrentes`.
 
 O objetivo deste artigo é analisar a performance de três engines de processamento de dados: `Pandas`, `Polars` e `DuckDB`. A análise será utilizada para ajudar a determinar qual dessas engines se encaixa melhor como principal ferramenta na nossa pipeline de ETL.
+
+## Sumário
+
+- [Introdução](#introdução)
+- [Sumário](#sumário)
+- [Engines de processamento](#engines-de-processamento)
+  - [Pandas](#pandas)
+  - [Polars](#polars)
+  - [DuckDB](#duckdb)
+- [Abordagens](#abordagens)
+  - [Estratégia de processamento 1](#estratégia-de-processamento-1)
+  - [Estratégia de processamento 2](#estratégia-de-processamento-2)
+- [Resultados](#resultados)
+  - [Estratégia de processamento 1](#estratégia-de-processamento-1-1)
+    - [Resultados para a Estratégia 1](#resultados-para-a-estratégia-1)
+  - [Estratégia de processamento 2](#estratégia-de-processamento-2-1)
+    - [Resultados para a Estratégia 2](#resultados-para-a-estratégia-2)
+- [Resultado geral](#resultado-geral)
+- [Análise pessoal sobre as engines](#análise-pessoal-sobre-as-engines)
+  - [Pandas](#pandas-1)
+  - [Polars](#polars-1)
+  - [DuckDB](#duckdb-1)
+- [Escolha da engine principal](#escolha-da-engine-principal)
+
+
 
 ## Engines de processamento
 
@@ -164,7 +161,7 @@ Explorar a biblioteca Polars foi um desafio inicial. Acostumado com Pandas, algu
 
 Minha experiência com DuckDB foi mista. Inicialmente, estava empolgado com suas premissas e a possibilidade de utilizar SQL dentro do Python. Porém, o desempenho na leitura dos arquivos .xls foi decepcionante, apesar de ter mostrado um desempenho aceitável nas demais etapas. A curva de aprendizado foi rápida devido à familiaridade com SQL, mas sua eficiência não foi suficiente para competir com Polars e Pandas.
 
-## Escolha da Engine Principal
+## Escolha da engine principal
 
 Com base nos resultados dos testes e considerando a quantidade de dados que temos para processar, assim como a rotatividade de membros nos projetos, decidimos adotar Pandas como a engine principal. 
 
