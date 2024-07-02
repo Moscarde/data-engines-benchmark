@@ -81,15 +81,15 @@ Para os testes, foram definidos três ambientes fictícios, cada um com diferent
 
 A finalidade desses ambientes é colocar à prova a escalabilidade de cada engine de processamento, permitindo uma análise comparativa de desempenho à medida que o volume de dados aumenta. No gráfico abaixo, é possível visualizar as características de cada ambiente.
 
-![Statistics M1 Environnments Metrics](statistics_m1_environnments_metrics.png)
+![Statistics M1 Environnments Metrics](plots/statistics_m1_environnments_metrics.png)
 
 Abaixo podemos observar o tempo total que cada engine gastou em cada ambiente
-![Statistics M1 Engines Total Time](statistics_m1_engines_total_time.png)
+![Statistics M1 Engines Total Time](plots/statistics_m1_engines_total_time.png)
 
 É notável a vantagem que o Polars leva sobre os concorrentes.
 
 Neste outro gráfico podemos ver com mais detalhes como cada engine desempenha em cada etapa do ETL:
-![Statistics M1 Engines Steps Time](statistics_m1_engines_steps_time.png)
+![Statistics M1 Engines Steps Time](plots/statistics_m1_engines_steps_time.png)
 
 #### Resultados para a Estratégia 1
 
@@ -120,13 +120,13 @@ Para os testes, foram definidos três ambientes fictícios, cada um com diferent
 - **Ambiente 3:** Contém o triplo da quantidade de dados do Ambiente 1.
 
 A finalidade desses ambientes é colocar à prova a escalabilidade de cada engine de processamento, permitindo uma análise comparativa de desempenho à medida que o volume de dados aumenta. No gráfico abaixo, é possível visualizar as características de cada ambiente.
-![Statistics M2 Environnments Metrics](statistics_m2_environnments_metrics.png)
+![Statistics M2 Environnments Metrics](plots/statistics_m2_environnments_metrics.png)
 
 O gráfico abaixo mostra o desempenho geral de cada engine nos determinados ambientes:
-![Statistics M2 Engines Total Time](statistics_m2_engines_total_time.png)
+![Statistics M2 Engines Total Time](plots/statistics_m2_engines_total_time.png)
 
 Embora o polars continue mantendo a liderança, o DuckDB mostrou um desempenho mais parelho com o pandas. Abaixo é detalhado o desempenho em cada etapa do processo:
-![Statistics M2 Engines Steps Time](statistics_m2_engines_steps_time.png)
+![Statistics M2 Engines Steps Time](plots/statistics_m2_engines_steps_time.png)
 
 #### Resultados para a Estratégia 2
 
