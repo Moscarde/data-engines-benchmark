@@ -1,0 +1,10 @@
+environment,engine,get_clean_concatenated_data,get_raw_unique_extraction_data,transform_data,concatenate_unique_extraction_data,export_dataframes,total_etl_time
+1y,polars,0.03,0.09,0.02,0.0,0.03,0.17
+1y,pandas,0.3,0.57,0.04,0.01,0.1,1.03
+1y,duckdb,1.04,0.24,0.09,0.05,0.05,1.47
+2y,polars,0.03,0.06,0.02,0.0,0.03,0.15
+2y,pandas,0.39,0.17,0.05,0.01,0.18,0.8
+2y,duckdb,1.47,0.27,0.07,0.05,0.06,1.92
+6y,polars,0.07,0.06,0.02,0.0,0.22,0.38
+6y,pandas,0.4,0.13,0.04,0.02,0.48,1.07
+6y,duckdb,2.59,0.22,0.07,0.07,0.1,3.05

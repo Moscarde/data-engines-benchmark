@@ -1,0 +1,10 @@
+environment,engine,extract_data,transform_data,load_to_clean,concatenate_monthly_data,export_monthly_data,concatenate_category_data,export_category_data,total_etl_time
+1y,duckdb,6.35,2.08,0.96,0.55,0.58,0.24,0.05,10.84
+1y,polars,1.68,0.4,0.43,0.03,0.32,0.05,0.05,3.0
+1y,pandas,3.21,1.17,0.78,0.19,0.54,0.06,0.15,6.11
+2y,duckdb,12.83,4.14,3.76,1.19,1.04,0.49,0.17,23.63
+2y,polars,2.59,0.7,0.65,0.05,0.36,0.02,0.04,4.44
+2y,pandas,6.53,1.97,1.36,0.29,0.77,0.08,0.25,11.28
+6y,duckdb,36.45,11.52,7.32,3.4,3.97,1.5,0.11,64.27
+6y,polars,8.23,2.48,2.7,0.17,1.33,0.06,0.06,15.13
+6y,pandas,19.42,6.07,4.42,0.93,2.23,0.19,0.47,33.79
