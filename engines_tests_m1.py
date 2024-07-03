@@ -254,16 +254,17 @@ class EtlLinkedin:
 if __name__ == "__main__":
     dir_raw = "data/linkedin/raw"
     environments_tests = ["1y", "2y", "6y"]
+    engines = ["duckdb", "polars", "pandas"]
 
     for environment in environments_tests:
         dir_environment = "_".join([dir_raw, environment])
 
         save_environment_metrics(environment, dir_environment)
 
-        engines = ["duckdb", "polars", "pandas"]
         for engine in engines:
             dir_clean = f"data/linkedin/clean/m1/{engine}/{environment}"
             etl = EtlLinkedin(dir_environment, dir_clean, engine, environment)
             etl.process_data()
+            
             del etl
             gc.collect()

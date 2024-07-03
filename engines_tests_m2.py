@@ -242,13 +242,14 @@ class EtlLinkedin:
 if __name__ == "__main__":
     environments = ["1y", "2y", "6y"]
     engines = ["polars", "pandas", "duckdb"]
+
     for environment in environments:
+        env_clean_dir = f"data\linkedin\clean\m1\{engines[0]}\{environment}\concatenated_dataframes"
+        save_environment_metrics(env=environment, env_clean_dir=env_clean_dir)
+        
         for engine in engines:
-            env_clean_dir = f"data\linkedin\clean\m1\{engines[0]}\{environment}\concatenated_dataframes"
-
-            save_environment_metrics(env=environment, env_clean_dir=env_clean_dir)
-
             etl = EtlLinkedin(engine, environment)
             etl.process_data()
+            
             del etl
             gc.collect()
