@@ -1,7 +1,7 @@
 ![Header Logo](images/header.png)
 # Data Engines Benchmark
 
-Como voluntário engenheiro de dados Jr na **SouJunior**, fui encarregado de uma tarefa crucial: comparar diferentes engines de processamento de dados para identificar a melhor opção para nossa pipeline de ETL (Extração, Transformação e Carga).
+Como voluntário engenheiro de dados Jr na [SouJunior](https://soujunior.tech), fui encarregado de uma tarefa crucial: comparar diferentes engines de processamento de dados para identificar a melhor opção para nossa pipeline de ETL (Extração, Transformação e Carga).
 
 Nossa pipeline processa dados extraídos da página do LinkedIn da SouJunior, com extrações ocorrendo a cada 15 dias. Em cada rotina de extração, são gerados quatro arquivos no formato .xls / .xlsx, correspondentes às categorias de `Conteúdo`, `Visitantes`, `Seguidores` e `Concorrentes`.
 

@@ -5,6 +5,8 @@ Nossa pipeline processa dados extraídos da página do LinkedIn da SouJunior, co
 
 O objetivo deste artigo é analisar a performance de três engines de processamento de dados: `Pandas`, `Polars` e `DuckDB`. A análise será utilizada para ajudar a determinar qual dessas engines se encaixa melhor como principal ferramenta na nossa pipeline de ETL.
 
+_Neste artigo não irei detalhar cada etapa de processamento, mas disponibilizei neste [repositório](https://github.com/moscarde/data-engines-benchmark) o código utilizado e instruções de uso_
+
 ## Sumário
 
 - [Introdução](#introdução)
@@ -64,7 +66,7 @@ A segunda estratégia adotada durante os testes é trabalhar com uma camada de d
 
 **Disclaimer:** Os resultados apresentados a seguir foram gerados com códigos desenvolvidos por um engenheiro Jr, utilizando técnicas simples para cada engine. É importante destacar que o uso de códigos mais avançados, combinando técnicas variadas e integrando outras bibliotecas, poderia influenciar significativamente os resultados dos testes. Portanto, especialistas em cada engine podem obter diferentes resultados ao otimizar e ajustar o processamento de dados.
 
-_Neste artigo não irei detalhar cada etapa de processamento, mas disponibilizei neste repositório (link para rep)_
+
 
 ### Estratégia de processamento 1
 
