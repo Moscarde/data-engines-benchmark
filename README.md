@@ -299,7 +299,7 @@ Para executar individualmente cada engine, execute os respectivos scripts locali
 
 ## 🙏 Agradecimentos
 
-Agradecimentos para o time de dados da [SouJunior](https://soujunior.tech) que colaboram com o projeto: [Pedro Fogaça](https://github.com/hdind), [Bruna Krobel](https://github.com/Bruna-Krobel) e [Karine Cristina](https://github.com/karinnecristina).
+Agradecimentos para o time de dados da [SouJunior](https://soujunior.tech) que colaboraram com o projeto: [Pedro Fogaça](https://github.com/hdind), [Bruna Krobel](https://github.com/Bruna-Krobel) e [Karine Cristina](https://github.com/karinnecristina).
 
 ## 💡 Contribuições
 
